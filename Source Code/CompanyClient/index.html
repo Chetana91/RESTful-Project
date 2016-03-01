@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Client</title>
+    <link rel="stylesheet" type="text/css" href="css/cvedan2.css">
+</head>
+<body>
+
+    <div id="header">
+        <div style="width: 100%; overflow: hidden;">
+            <div style="padding: 10px; margin-left:50px;" > <h1>Stock Monitor</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="nav">
+            <ul>
+                <li><a href="#" onclick="showDiv('d_add')">Add Company</a></li>
+                <li><a href="#" onclick="showDiv('d_delete')">Delete Company</a></li>
+                <li><a href="#" onclick="showDiv('d_list')">Company List</a></li>
+                <li><a href="#" onclick="showDiv('d_history')">Company History</a></li>
+            </ul>
+        </div>
+
+        <div id="main">
+
+            <div id="default">
+                <h4>Select a choice</h4>
+                <input id="choice" type="hidden" value="default"/>
+            </div>
+
+            <div id="d_add" style="display: none">
+                <h2>Add Company</h2>
+                <h4>Enter a valid Company Symbol / Ticker Symbol to start monitoring</h4>
+                <input type="text" id="a_smb" placeholder="Enter Company Symbol" onfocus="document.getElementById('a_smb').value=''"/>
+                <input type="button" id="b_add" value="Add Company" onclick="addCompany()" class="button"/>
+            </div>
+
+            <div id="d_delete" style="display: none">
+                <h2>Delete Company</h2>
+                <h4>Enter a valid Company Symbol / Ticker Symbol to stop monitoring and delete from database</h4>
+                <input type="text" id="d_smb" placeholder="Enter Company Symbol" onfocus="document.getElementById('d_smb').value=''"/>
+                <input type="button" id="b_delete" value="Delete Company" onclick="deleteCompany()" class="button"/>
+            </div>
+
+            <div id="d_list" style="display: none">
+                <h2>Company List</h2>
+                <h4>All companies currently being monitored</h4>
+                <input type="button" id="b_list" value="List Companies" onclick="listCompanies()" class="button"/>
+            </div>
+
+            <div id="d_history" style="display: none">
+                <h2>Company History</h2>
+                <h4>Enter company symbol to see company performance since the company was monitored</h4>
+                <input type="text" id="h_smb" placeholder="Enter Company Symbol" onfocus="document.getElementById('h_smb').value=''"/>
+                <input type="button" id="b_history" value="Get Company History" onclick="getHistory()" class="button"/>
+            </div>
+
+            <div id="result" class="result">
+            </div>
+
+            <input id="draw_chart" type="button" value="Draw Chart" class="button" onclick="InitChart()" style="display: none"/>
+            <svg id="visualisation" width="1000" height="500"  style="display: none"></svg>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-2.2.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.16/d3.min.js"></script>
+    <script>
+
+        function showDiv(divName) {
+
+            $("#result").hide();
+            var currentDiv = $("#choice").val();
+            $("#"+currentDiv).hide();
+            $("#"+divName).show();
+            $("#choice").val(divName);
+        }
+
+        function addCompany() {
+            $("#result").html('');
+            $.getJSON('http://localhost:8080/addCompany?symbol='+$("#a_smb").val(), function (result) {
+                $("#result").html(result.reason).show();
+            })
+        }
+
+        function deleteCompany() {
+            $("#result").html('');
+            $.getJSON('http://localhost:8080/deleteCompany?symbol='+$("#d_smb").val(), function (result){
+                $("#result").html(result.reason).show();
+            })
+        }
+
+        function listCompanies() {
+            $("#result").html('');
+            $.getJSON('http://localhost:8080/listCompanies', function (result) {
+                if(result.count>0) {
+                    $("#result").html(genTable(result.companyList)).show();
+                }
+                else {
+                    $("#result").html(result.reason).show();
+                }
+            })
+        }
+
+        function getHistory() {
+            $("#result").html('');
+            $.getJSON('http://localhost:8080/getHistory?symbol='+$("#h_smb").val(), function (result) {
+                if(result.count>0) {
+                    $("#result").html(genTable(result.companyList)).show();
+                }
+                else {
+                    $("#result").html(result.reason).show();
+                }
+                /*
+                if(result.count>0) {
+                    $("#result").html(result.reason).show();
+                    $("#draw_chart").show();
+                    $("#visualisation").show();
+                }
+                else {
+                    $("#result").html(result.reason).show();
+                }*/
+
+            })
+        }
+
+        function genTable(json) {
+            var res = $('#result');
+            var tr
+            res.append("<table id='t_res'><tr><th>#</th><th>Symbol</th><th>Name</th><th>Current Ask</th><th>Current Bid</th><th>Time Recorded</th>");
+            for (var i = 0; i < json.length; i++) {
+                tr = $('<tr/>');
+                tr.append("<td>" + (i+1) + "</td>");
+                tr.append("<td>" + json[i].symbol + "</td>");
+                tr.append("<td>" + json[i].name + "</td>");
+                tr.append("<td>" + json[i].ask + "</td>");
+                tr.append("<td>" + json[i].bid + "</td>");
+                tr.append("<td>" + new Date(json[i].timestamp) + "</td>");
+                $('#t_res').append(tr);
+            }
+            $('#result').append("</table>");
+        }
+
+        function InitChart(lineData) {
+
+            var vis = d3.select("#visualisation"),
+                    WIDTH = 1000,
+                    HEIGHT = 500,
+                    MARGINS = {
+                        top: 20,
+                        right: 20,
+                        bottom: 20,
+                        left: 50
+                    },
+                    xRange = d3.scale.linear().range([MARGINS.left, WIDTH - MARGINS.right]).domain([d3.min(lineData, function (d) {
+                        return d.x;
+                    }),
+                        d3.max(lineData, function (d) {
+                            return d.x;
+                        })
+                    ]),
+
+                    yRange = d3.scale.linear().range([HEIGHT - MARGINS.top, MARGINS.bottom]).domain([d3.min(lineData, function (d) {
+                        return d.y;
+                    }),
+                        d3.max(lineData, function (d) {
+                            return d.y;
+                        })
+                    ]),
+
+                    xAxis = d3.svg.axis()
+                            .scale(xRange)
+                            .tickSize(5)
+                            .tickSubdivide(true),
+
+                    yAxis = d3.svg.axis()
+                            .scale(yRange)
+                            .tickSize(5)
+                            .orient("left")
+                            .tickSubdivide(true);
+
+
+            vis.append("svg:g")
+                    .attr("class", "x axis")
+                    .attr("transform", "translate(0," + (HEIGHT - MARGINS.bottom) + ")")
+                    .call(xAxis);
+
+            vis.append("svg:g")
+                    .attr("class", "y axis")
+                    .attr("transform", "translate(" + (MARGINS.left) + ",0)")
+                    .call(yAxis);
+
+            var lineFunc = d3.svg.line()
+                    .x(function(d) {
+                        return xRange(d.x);
+                    })
+                    .y(function(d) {
+                        return yRange(d.y);
+                    })
+                    .interpolate('monotone');
+
+            vis.append("svg:path")
+                    .attr("d", lineFunc(lineData))
+                    .attr("stroke", "#47B3DD")
+                    .attr("stroke-width", 2)
+                    .attr("fill", "none");
+
+
+            // DRAWING CIRCLES
+            var canvas_width = WIDTH;
+            var canvas_height = HEIGHT;
+            var padding = 25;
+            // Define Scales - scales map an input domain with an output range
+            var xScale = d3.scale.linear()
+                    .domain([0, d3.max(lineData, function(d) {
+                        return d.x;  // get the input domain as first column of array
+                    })])
+                    .range([padding, canvas_width - padding * 2])  // set the output range
+                    .nice();  // Make decimals round up nicely
+
+            var yScale = d3.scale.linear()
+                    .domain([0, d3.max(lineData, function(d) {
+                        return d.y;  // gets the input domain as the second column of array
+                    })])
+                    .range([canvas_height - padding, padding])  // set the output range
+                    .nice();  // Make decimals round up nicely
+
+            // Add circles from data
+            vis.selectAll("circle")
+                    .data(lineData)
+                    .enter()
+                    .append("circle")
+                    .attr("x", function(d) {
+                        return xRange(d.x);  // Location of x
+                    })
+                    .attr("y", function(d) {
+                        return yRange(d.y);  // Location of y
+                    })
+                    .attr("r", 4)  // Radius
+                    .attr("cx", function(d) {
+                        return xRange(d.x);  // Returns scaled circle x
+                    })
+                    .attr("cy", function(d) {
+                        return yRange(d.y);  // Returns scaled circle y
+                    })
+                    .style("fill","blue");
+
+
+            // Add Text Labels
+            vis.selectAll("text")
+                    .data(lineData)
+                    .enter()
+                    .append("text")
+                    .text(function(d) {
+                        console.log(d.x+","+d.y);
+                        return d.x + "," + d.y;
+                    })
+                    .attr("x", function(d) {
+                        return xRange(d.x);  // Returns scaled location of x
+                    })
+                    .attr("y", function(d) {
+                        return yRange(d.y);  // Returns scaled circle y
+                    })
+                    .attr("font_family", "sans-serif")  // Font type
+                    .attr("font-size", "20px")  // Font size
+                    .attr("fill", "black");   // Font color
+
+        }
+    </script>
+
+
+</body>
+</html>
